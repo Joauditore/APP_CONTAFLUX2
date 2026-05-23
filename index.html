@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>ContaFlux — Simulador Contable Interactivo</title>
+    <style>
+        :root {
+            --bg-main: #111827;
+            --bg-card: #1f2937;
+            --bg-input: #374151;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --color-activo: #6ee7b7;
+            --color-pasivo: #fca5a5;
+            --color-patrimonio: #c4b5fd;
+            --color-ingreso: #fde68a;
+            --color-gasto: #fdba74;
+            --color-debe: #93c5fd;
+            --color-haber: #6ee7b7;
+            --border-color: #4b5563;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-main); color: var(--text-main); font-size: 14px; display: flex; flex-direction: column; min-height: 100vh; }
+        
+        header { background-color: var(--bg-card); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+        .logo { font-size: 18px; font-weight: bold; color: var(--color-activo); }
+        .nav-buttons button { background: var(--bg-input); border: 1px solid var(--border-color); color: white; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; margin-left: 8px; }
+        
+        #app-container { display: flex; flex: 1; }
+        aside { width: 240px; background-color: var(--bg-card); border-right: 1px solid var(--border-color); padding: 15px; }
+        .menu-nav button { display: block; width: 100%; text-align: left; padding: 10px 12px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; border-radius: 4px; margin-bottom: 4px; }
+        .menu-nav button.active { background-color: var(--bg-input); color: white; font-weight: bold; border-left: 4px solid var(--color-activo); }
+        
+        main { flex: 1; padding: 25px; overflow-y: auto; }
+        .view-panel { display: none; }
+        .view-panel.active { display: block; }
+        
+        h2 { margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; }
+        
+        /* Tablas Contables */
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: var(--bg-card); }
+        th, td { border: 1px solid var(--border-color); padding: 10px; text-align: left; }
+        th { background-color: var(--bg-input); }
+        .num-col { text-align: right; }
+        .total-row { font-weight: bold; background-color: var(--bg-input); }
+        .double-underline { border-bottom: 4px double var(--text-main); }
+        
+        /* Colores Masas */
+        .badge-activo { color: var(--color-activo); font-weight: bold; }
+        .badge-pasivo { color: var(--color-pasivo); font-weight: bold; }
+        .badge-patrimonio { color: var(--color-patrimonio); font-weight: bold; }
+        .negativo-patrimonio { color: var(--color-pasivo) !important; font-weight: bold; }
+        
+        /* Form y Autocomplete */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: var(--text-muted); }
+        input, select, textarea { width: 100%; padding: 8px; background-color: var(--bg-input); border: 1px solid var(--border-color); color: white; border-radius: 4px; }
+        .btn-submit { background-color: #10b981; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        
+        .autocomplete-wrapper { position: relative; }
+        .autocomplete-items { position: absolute; border: 1px solid var(--border-color); background-color: var(--bg-card); z-index: 99; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; }
+        .autocomplete-items div { padding: 10px; cursor: pointer; }
+        .autocomplete-items div:hover, .autocomplete-active { background-color: var(--bg-input); }
+        
+        /* Panel Lateral Docs */
+        #panel-documentos { position: fixed; right: -320px; top: 0; width: 320px; height: 100%; background-color: var(--bg-card); border-left: 1px solid var(--border-color); transition: right 0.3s ease; z-index: 1000; padding: 20px; display: flex; flex-direction: column; }
+        #panel-documentos.open { right: 0; }
+        .doc-item { padding: 8px; border: 1px solid var(--border-color); margin-top: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Modales */
+        .modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); align-items: center; justify-content: center; }
+        .modal-content { background-color: var(--bg-card); padding: 25px; border-radius: 6px; width: 90%; max-width: 500px; border: 1px solid var(--border-color); }
+        .modal-full { max-width: 95%; height: 90%; display: flex; flex-direction: column; }
+        .modal-body { flex: 1; overflow-y: auto; background: white; color: black; padding: 20px; margin-top: 15px; }
+        
+        /* Alertas pedagógicas */
+        .alerta-pedagogica { padding: 10px; margin: 10px 0; border-radius: 4px; font-weight: bold; }
+        .alerta-verde { background-color: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; }
+        .alerta-roja { background-color: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; }
+        
+        footer { background-color: var(--bg-card); padding: 10px; text-align: center; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: auto; }
+        
+        /* Auth Screen */
+        #auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; height: 100vh; background-color: var(--bg-main); }
+        .auth-box { background-color: var(--bg-card); padding: 30px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; max-width: 400px; }
+        
+        /* Estilos de Filas Balance de 8 Columnas */
+        .bg-subtotal { background-color: #4b4218 !important; color: #fde68a !important; }
+        .bg-resultado { background-color: #4c1d1d !important; color: #fca5a5 !important; }
+        .bg-resultado-utilidad { background-color: #064e3b !important; color: #6ee7b7 !important; }
+        .bg-totales { background-color: #1e3a8a !important; color: #93c5fd !important; }
+        
+        /* Clases auxiliares ocultamiento */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA DE AUTENTICACIÓN -->
+    <div id="auth-screen">
+        <div class="auth-box">
+            <h1 style="text-align: center; margin-bottom: 20px; color: var(--color-activo);">ContaFlux</h1>
+            <div class="form-group">
+                <label>Correo Electrónico</label>
+                <input type="email" id="login-email" value="profesorjosemunoz@gmail.com">
+            </div>
+            <div class="form-group">
+                <label>Contraseña</label>
+                <input type="password" id="login-password" value="mvpJ1985">
+            </div>
+            <button class="btn-submit" style="width: 100%;" onclick="procesarLogin()">Iniciar Sesión</button>
+            <p style="margin-top: 15px; font-size: 11px; text-align: center; color: var(--text-muted); cursor: pointer;" onclick="recuperarClave()">¿Olvidó su contraseña?</p>
+            <div style="margin-top: 25px; text-align: center; font-size: 11px; letter-spacing: 1px; color: var(--text-muted);">CREADO POR @prof_josemunoz</div>
+        </div>
+    </div>
+
+    <!-- ENTORNO PRINCIPAL SIMULADOR (OCULTO INICIALMENTE) -->
+    <div id="main-app" class="hidden" style="flex-direction: column; flex: 1;">
+        <header>
+            <div class="logo">ContaFlux <span id="txt-entorno" style="font-size: 12px; color: white; margin-left: 10px;"></span></div>
+            <div class="nav-buttons">
+                <select id="sel-entorno" onchange="cambiarEntorno()" style="width: 160px; display: inline-block; padding: 4px;">
+                    <option value="libre">Registro Libre</option>
+                    <option value="precargado">Modo Precargado</option>
+                </select>
+                <button onclick="togglePanelDocs()">📎 Documentos</button>
+                <button onclick="abrirModalPDF()" style="background-color: #3b82f6;">Vista Impresión Alumnos</button>
+                <button onclick="confirmarReiniciar()" style="background-color: #ef4444;">Reiniciar Ejercicio</button>
+                <button onclick="logout()" style="background: none; border: none; color: var(--text-muted);">Salir</button>
+            </div>
+        </header>
+
+        <div id="app-container">
+            <aside>
+                <nav class="menu-nav">
+                    <button id="btn-nav-diario" class="active" onclick="navegar('diario')">Libro Diario</button>
+                    <button id="btn-nav-mayor" onclick="navegar('mayor')">Libro Mayor</button>
+                    <button id="btn-nav-comprobacion" onclick="navegar('comprobacion')">Balance Comprobación</button>
+                    <button id="btn-nav-ocho" onclick="navegar('ocho')">Balance 8 Columnas</button>
+                    <button id="btn-nav-situacion" onclick="navegar('situacion')">Estado de Situación</button>
+                    <button id="btn-nav-plan" onclick="navegar('plan')">Plan de Cuentas</button>
+                </nav>
+            </aside>
+
+            <main>
+                <!-- VISTA: LIBRO DIARIO -->
+                <div id="view-diario" class="view-panel active">
+                    <h2>Registro de Asiento Contable</h2>
+                    <div style="background-color: var(--bg-card); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div style="width: 15%;">
+                                <label>N° Asiento</label>
+                                <input type="text" id="asiento-num">
+                            </div>
+                            <div style="width: 25%;">
+                                <label>Fecha</label>
+                                <input type="date" id="asiento-fecha">
+                            </div>
+                            <div style="width: 25%;">
+                                <label>N° Documento</label>
+                                <input type="text" id="asiento-ndoc" placeholder="Ej: F-001">
+                            </div>
+                        </div>
+
+                        <div id="asiento-lineas-contenedor">
+                            <!-- Líneas dinámicas -->
+                        </div>
+                        
+                        <div style="margin-top: 10px;">
+                            <button onclick="agregarLineaFormulario()" style="background-color: var(--bg-input); border: 1px solid var(--border-color); color: white; padding: 5px 10px; cursor: pointer; border-radius: 4px;">+ Agregar Línea</button>
+                        </div>
+
+                        <div style="margin-top: 15px;">
+                            <label>Glosa explicativa (Aparecerá al pie del asiento)</label>
+                            <textarea id="asiento-glosa" rows="2"></textarea>
+                        </div>
+
+                        <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+                            <div id="cuadrante-validacion" style="font-weight: bold;"></div>
+                            <button class="btn-submit" onclick="guardarAsiento()">Registrar Asiento</button>
+                        </div>
+                    </div>
+
+                    <h2>Libro Diario Registrado</h2>
+                    <div id="diario-registrado-contenedor"></div>
+                </div>
+
+                <!-- VISTA: LIBRO MAYOR -->
+                <div id="view-mayor" class="view-panel">
+                    <h2>Libro Mayor Esquematico</h2>
+                    <div id="mayor-contenedor"></div>
+                </div>
+
+                <!-- VISTA: BALANCE DE COMPROBACIÓN -->
+                <div id="view-comprobacion" class="view-panel">
+                    <h2>Balance de Comprobación y Saldos</h2>
+                    <div id="comprobacion-contenedor"></div>
+                </div>
+
+                <!-- VISTA: BALANCE DE 8 COLUMNAS -->
+                <div id="view-ocho" class="view-panel">
+                    <h2>Hoja de Trabajo (Balance de 8 Columnas)</h2>
+                    <div id="ocho-contenedor" style="overflow-x: auto;"></div>
+                </div>
+
+                <!-- VISTA: ESTADO DE SITUACIÓN -->
+                <div id="view-situacion" class="view-panel">
+                    <h2>Estado de Situación Financiera</h2>
+                    <div id="situacion-contenedor"></div>
+                </div>
+
+                <!-- VISTA: PLAN DE CUENTAS -->
+                <div id="view-plan" class="view-panel">
+                    <h2>Gestión del Plan de Cuentas</h2>
+                    <div style="background-color: var(--bg-card); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                        <h3>Crear Nueva Cuenta Contable</h3>
+                        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+                            <input type="text" id="pc-codigo" placeholder="Código (ej: 1.1.07)" style="width: 15%;">
+                            <input type="text" id="pc-nombre" placeholder="Nombre de la Cuenta" style="width: 25%;">
+                            <select id="pc-clasificacion" style="width: 20%;">
+                                <option value="Activo Corriente">Activo Corriente</option>
+                                <option value="Activo No Corriente">Activo No Corriente</option>
+                                <option value="Pasivo Corriente">Pasivo Corriente</option>
+                                <option value="Pasivo No Corriente">Pasivo No Corriente</option>
+                                <option value="Patrimonio Capital">Patrimonio Capital</option>
+                                <option value="Patrimonio Socios">Patrimonio Socios</option>
+                                <option value="Ganancia / Ingreso">Ganancia / Ingreso</option>
+                                <option value="Pérdida / Gasto">Pérdida / Gasto</option>
+                            </select>
+                            <select id="pc-naturaleza" style="width: 15%;">
+                                <option value="Deudora">Deudora</option>
+                                <option value="Acreedora">Acreedora</option>
+                            </select>
+                            <button class="btn-submit" onclick="crearCuentaPersonalizada()">Guardar Cuenta</button>
+                        </div>
+                    </div>
+                    <table id="tabla-plan-cuentas">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Cuenta</th>
+                                <th>Clasificación</th>
+                                <th>Naturaleza</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-plan-cuentas"></tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+
+        <footer>
+            <span>ContaFlux &copy; 2026 — Panel del Docente | </span>
+            <strong>CREADO POR @prof_josemunoz</strong>
+        </footer>
+    </div>
+
+    <!-- PANEL LATERAL DE DOCUMENTOS -->
+    <div id="panel-documentos">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+            <h3>📎 Documentos Soporte</h3>
+            <button onclick="togglePanelDocs()" style="background: none; border: none; color: white; cursor: pointer; font-size: 18px;">&times;</button>
+        </div>
+        <div style="margin-top: 15px;">
+            <input type="file" id="file-doc-input" onchange="subirDocumento()" style="font-size: 12px;">
+        </div>
+        <div id="lista-documentos" style="flex: 1; overflow-y: auto; margin-top: 15px;"></div>
+    </div>
+
+    <!-- MODAL CONFIRMACIONES / REINICIAR -->
+    <div id="modal-confirm" class="modal">
+        <div class="modal-content">
+            <h3>¿Confirmar Acción?</h3>
+            <p id="modal-confirm-texto" style="margin: 15px 0; color: var(--text-muted);"></p>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="cerrarModalConfirm()" style="padding: 6px 12px; background: var(--bg-input); color: white; border: 1px solid var(--border-color); cursor: pointer; border-radius: 4px;">Cancelar</button>
+                <button id="modal-confirm-btn-ok" style="padding: 6px 12px; background: #ef4444; color: white; border: none; cursor: pointer; border-radius: 4px;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE IMPRESIÓN / VISUALIZACIÓN COMPLETA PARA ALUMNOS -->
+    <div id="modal-pdf" class="modal">
+        <div class="modal-content modal-full">
+            <div style="display: flex; justify-content: space-between; align-items: center; color: white;">
+                <h3>Vista de Impresión / Guardar Reporte Educativo</h3>
+                <div>
+                    <button onclick="ejecutarImpresionFlujo()" style="background-color: #10b981; color: white; border: none; padding: 8px 16px; cursor: pointer; font-weight: bold; border-radius: 4px; margin-right: 10px;">Imprimir / Guardar PDF</button>
+                    <button onclick="cerrarModalPDF()" style="background-color: var(--bg-input); color: white; border: 1px solid var(--border-color); padding: 8px 16px; cursor: pointer; border-radius: 4px;">Cerrar</button>
+                </div>
+            </div>
+            <div id="modal-pdf-render-body" class="modal-body">
+                <!-- Se inyecta la hoja estructurada en blanco para la lectura limpia de los alumnos -->
+            </div>
+        </div>
+    </div>
+
+    <!-- EMBED JAVASCRIPT ES5 LOGIC -->
+    <script>
+        // Fuentes de datos fijas e inalterables
+        var CUENTAS_MAESTRAS = [
+            { id: "1.1.01", nombre: "Caja", clasificacion: "Activo Corriente", naturaleza: "Deudora" },
+            { id: "1.1.02", nombre: "Banco", clasificacion: "Activo Corriente", naturaleza: "Deudora" },
+            { id: "1.1.03", nombre: "Clientes/Cuentas por Cobrar", clasificacion: "Activo Corriente", naturaleza: "Deudora" },
+            { id: "1.1.04", nombre: "Mercaderías", clasificacion: "Activo Corriente", naturaleza: "Deudora" },
+            { id: "1.1.05", nombre: "IVA Crédito Fiscal", clasificacion: "Activo Corriente", naturaleza: "Deudora" },
+            { id: "1.1.06", nombre: "Deudores Varios", clasificacion: "Activo Corriente", naturaleza: "Deudora" },
+            { id: "1.2.01", nombre: "Terrenos", clasificacion: "Activo No Corriente", naturaleza: "Deudora" },
+            { id: "1.2.02", nombre: "Edificios", clasificacion: "Activo No Corriente", naturaleza: "Deudora" },
+            { id: "1.2.03", nombre: "Maquinaria y Equipo", clasificacion: "Activo No Corriente", naturaleza: "Deudora" },
+            { id: "1.2.04", nombre: "Depreciación Acumulada", clasificacion: "Activo No Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.01", nombre: "Proveedores/Ctas por Pagar", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.02", nombre: "Documentos por Pagar", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.03", nombre: "IVA Débito Fiscal", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.04", nombre: "Acreedores Varios", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.05", nombre: "Remuneraciones por Pagar", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.06", nombre: "Impuesto Renta por Pagar", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.1.07", nombre: "Préstamos Bancarios CP", clasificacion: "Pasivo Corriente", naturaleza: "Acreedora" },
+            { id: "2.3.01", nombre: "Capital Social", clasificacion: "Patrimonio Capital", naturaleza: "Acreedora" },
+            { id: "2.3.02", nombre: "Cuenta Obligada Socio A", clasificacion: "Patrimonio Socios", naturaleza: "Deudora" },
+            { id: "2.3.03", nombre: "Cuenta Obligada Socio B", clasificacion: "Patrimonio Socios", naturaleza: "Deudora" },
+            { id: "2.3.04", nombre: "Cuenta Obligada Socio C", clasificacion: "Patrimonio Socios", naturaleza: "Deudora" }
+        ];
+
+        var ASIENTOS_DEMO = [
+            {
+                id: 1710000000001,
+                num: "1",
+                fecha: "2025-01-02",
+                glosa: "Constitución Sociedad",
+                ndoc: "ES-001",
+                lineas: [
+                    { cuenta: "1.1.02 · Banco", codigo: "1.1.02", nombre: "Banco", debe: 15000000, haber: 0 },
+                    { cuenta: "2.3.01 · Capital Social", codigo: "2.3.01", nombre: "Capital Social", debe: 0, haber: 20000000 },
+                    { cuenta: "2.3.02 · Cuenta Obligada Socio A", codigo: "2.3.02", nombre: "Cuenta Obligada Socio A", debe: 3000000, haber: 0 },
+                    { cuenta: "2.3.03 · Cuenta Obligada Socio B", codigo: "2.3.03", nombre: "Cuenta Obligada Socio B", debe: 2000000, haber: 0 }
+                ]
+            },
+            {
+                id: 1710000000002,
+                num: "2",
+                fecha: "2025-01-05",
+                glosa: "Compra mercaderías",
+                ndoc: "F-001",
+                lineas: [
+                    { cuenta: "1.1.04 · Mercaderías", codigo: "1.1.04", nombre: "Mercaderías", debe: 3000000, haber: 0 },
+                    { cuenta: "1.1.05 · IVA Crédito Fiscal", codigo: "1.1.05", nombre: "IVA Crédito Fiscal", debe: 570000, haber: 0 },
+                    { cuenta: "1.1.02 · Banco", codigo: "1.1.02", nombre: "Banco", debe: 0, haber: 3570000 }
+                ]
+            },
+            {
+                id: 1710000000003,
+                num: "3",
+                fecha: "2025-01-10",
+                glosa: "Venta a crédito",
+                ndoc: "F-002",
+                lineas: [
+                    { cuenta: "1.1.03 · Clientes/Cuentas por Cobrar", codigo: "1.1.03", nombre: "Clientes/Cuentas por Cobrar", debe: 5950000, haber: 0 },
+                    { cuenta: "2.1.03 · IVA Débito Fiscal", codigo: "2.1.03", nombre: "IVA Débito Fiscal", debe: 0, haber: 950000 },
+                    { cuenta: "4.1.01 · Ventas", codigo: "4.1.01", nombre: "Ventas", debe: 0, haber: 5000000 }
+                ]
+            }
+        ];
+
+        // Estado Maestro Global
+        var STATE = { al: [], ap: [], px: [], docs: [] };
+        var entornoActual = "libre"; // 'libre' o 'precargado'
+        var editandoAsientoId = null;
+
+        function procesarLogin() {
+            var em = document.getElementById("login-email").value;
+            var pass = document.getElementById("login-password").value;
+            if (em === "profesorjosemunoz@gmail.com" && pass === "mvpJ1985") {
+                document.getElementById("auth-screen").style.display = "none";
+                document.getElementById("main-app").style.display = "flex";
+                inicializarSistema();
+            } else {
+                alert("Credenciales incorrectas. Verifique los accesos.");
+            }
+        }
+
+        function recuperarClave() {
+            alert("Para recuperar su contraseña, por favor contáctese directamente con el Administrador del Sistema para recibir su clave inicial de respaldo.");
+        }
+
+        function logout() {
+            document.getElementById("main-app").style.display = "none";
+            document.getElementById("auth-screen").style.display = "flex";
+        }
+
+        function inicializarSistema() {
+            var dataRaw = localStorage.getItem("cf_v3");
+            if (dataRaw) {
+                try {
+                    STATE = JSON.parse(dataRaw);
+                    if (!STATE.al) STATE.al = [];
+                    if (!STATE.ap) STATE.ap = [];
+                    if (!STATE.px) STATE.px = [];
+                    if (!STATE.docs) STATE.docs = [];
+                } catch(e) {
+                    restablecerEstadoVacio();
+                }
+            } else {
+                restablecerEstadoVacio();
+            }
+            
+            if (STATE.ap.length === 0) {
+                STATE.ap = JSON.parse(JSON.stringify(ASIENTOS_DEMO));
+                guardarEnStorage();
+            }
+            
+            cambiarEntorno();
+        }
+
+        function restablecerEstadoVacio() {
+            STATE = { al: [], ap: [], px: [], docs: [] };
+            guardarEnStorage();
+        }
+
+        function guardarEnStorage() {
+            localStorage.setItem("cf_v3", JSON.stringify(STATE));
+        }
+
+        function cambiarEntorno() {
+            entornoActual = document.getElementById("sel-entorno").value;
+            var label = document.getElementById("txt-entorno");
+            if (entornoActual === "libre") {
+                label.innerHTML = "[ENTORNO: REGISTRO LIBRE]";
+                label.style.color = "#6ee7b7";
+            } else {
+                label.innerHTML = "[ENTORNO: PRECARGADO / DEMOSTRACIÓN]";
+                label.style.color = "#fde68a";
+            }
+            editandoAsientoId = null;
+            limpiarFormularioAsiento();
+            recargarTodo();
+        }
+
+        function obtenerAsientosEntorno() {
+            return (entornoActual === "libre") ? STATE.al : STATE.ap;
+        }
+
+        function fijarAsientosEntorno(arr) {
+            if (entornoActual === "libre") {
+                STATE.al = arr;
+            } else {
+                STATE.ap = arr;
+            }
+            guardarEnStorage();
+        }
+
+        function obtenerPlanCuentasCompleto() {
+            var lista = [].concat(CUENTAS_MAESTRAS);
+            for (var i = 0; i < STATE.px.length; i++) {
+                lista.push(STATE.px[i]);
+            }
+            return lista;
+        }
+
+        function recargarTodo() {
+            renderizarPlanCuentas();
+            reconstruirLineasFormAsiento();
+            renderizarDiarioRegistrado();
+            evaluarAsientoCuadraturaRealTime();
+        }
+
+        function navegar(modulo) {
+            var paneles = document.getElementsByClassName("view-panel");
+            for (var i = 0; i < paneles.length; i++) {
+                paneles[i].classList.remove("active");
+            }
+            document.getElementById("view-" + modulo).classList.add("active");
+
+            var btns = document.querySelectorAll(".menu-nav button");
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].classList.remove("active");
+            }
+            document.getElementById("btn-nav-" + modulo).classList.add("active");
+
+            if (modulo === "mayor") renderizarMayor();
+            if (modulo === "comprobacion") renderizarComprobacion();
+            if (modulo === "ocho") renderizar8Columnas();
+            if (modulo === "situacion") renderizarSituacion();
+        }
+
+        // FORMATOS CHILENOS
+        function formatoMoneda(valor) {
+            var numero = Math.round(Math.abs(valor));
+            var str = numero.toString();
+            var resultado = "";
+            var c = 0;
+            for (var i = str.length - 1; i >= 0; i--) {
+                resultado = str.charAt(i) + resultado;
+                c++;
+                if (c % 3 === 0 && i !== 0) {
+                    resultado = "." + resultado;
+                }
+            }
+            return (valor < 0 ? "-$" : "$ ") + resultado;
+        }
+
+        function formatInputMiles(input) {
+            var val = input.value.replace(/\D/g, "");
+            if(val === "") { input.setAttribute("data-valor", "0"); input.value = ""; return; }
+            input.setAttribute("data-valor", val);
+            var num = parseInt(val, 10);
+            var str = num.toString();
+            var res = "";
+            var c = 0;
+            for (var i = str.length - 1; i >= 0; i--) {
+                res = str.charAt(i) + res;
+                c++;
+                if (c % 3 === 0 && i !== 0) res = "." + res;
+            }
+            input.value = res;
+            evaluarAsientoCuadraturaRealTime();
+        }
+
+        // MOTOR CENTRAL CONTABLE: FUENTE DE VERDAD ABSOLUTA
+        function buildMayor() {
+            var asientos = obtenerAsientosEntorno();
+            var cuentasMap = {};
+            var pCompleto = obtenerPlanCuentasCompleto();
+
+            // Inicializar mapa estructural
+            for (var i = 0; i < pCompleto.length; i++) {
+                var c = pCompleto[i];
+                cuentasMap[c.id] = { 
+                    codigo: c.id, 
+                    nombre: c.nombre, 
+                    clasificacion: c.clasificacion, 
+                    naturaleza: c.naturaleza, 
+                    movimientos: [], 
+                    totalDebe: 0, 
+                    totalHaber: 0 
+                };
+            }
+
+            // Procesar transacciones cronológicas ordenadas
+            var asientosClonados = [].concat(asientos);
+            asientosClonados.sort(function(a, b) { return parseInt(a.num, 10) - parseInt(b.num, 10); });
+
+            for (var i = 0; i < asientosClonados.length; i++) {
+                var a = asientosClonados[i];
+                for (var j = 0; j < a.lineas.length; j++) {
+                    var l = a.lineas[j];
+                    if (!cuentasMap[l.codigo]) {
+                        // Respaldo dinámico si la cuenta fue creada al vuelo
+                        var clas = "Activo Corriente";
+                        var nat = "Deudora";
+                        if (l.codigo.indexOf("2.") === 0) { clas = "Pasivo Corriente"; nat = "Acreedora"; }
+                        if (l.codigo.indexOf("4.") === 0) { clas = "Ganancia / Ingreso"; nat = "Acreedora"; }
+                        if (l.codigo.indexOf("5.") === 0) { clas = "Pérdida / Gasto"; nat = "Deudora"; }
+                        cuentasMap[l.codigo] = { codigo: l.codigo, nombre: l.nombre, clasificacion: clas, naturaleza: nat, movimientos: [], totalDebe: 0, totalHaber: 0 };
+                    }
+                    
+                    cuentasMap[l.codigo].movimientos.push({
+                        fecha: a.fecha,
+                        ndoc: a.ndoc,
+                        glosa: a.glosa,
+                        debe: l.debe,
+                        haber: l.haber
+                    });
+                    cuentasMap[l.codigo].totalDebe += l.debe;
+                    cuentasMap[l.codigo].totalHaber += l.haber;
+                }
+            }
+            return cuentasMap;
+        }
+
+        // GESTIÓN DEL PLAN DE CUENTAS
+        function renderizarPlanCuentas() {
+            var lista = obtenerPlanCuentasCompleto();
+            var html = "";
+            var asientos = obtenerAsientosEntorno();
+
+            for (var i = 0; i < lista.length; i++) {
+                var c = lista[i];
+                var esMaestra = false;
+                for (var j = 0; j < CUENTAS_MAESTRAS.length; j++) {
+                    if (CUENTAS_MAESTRAS[j].id === c.id) { esMaestra = true; break; }
+                }
+
+                // Validar si posee movimientos activos
+                var tieneMov = false;
+                for (var k = 0; k < asientos.length; k++) {
+                    for (var m = 0; m < asientos[k].lineas.length; m++) {
+                        if (asientos[k].lineas[m].codigo === c.id) { tieneMov = true; break; }
+                    }
+                    if (tieneMov) break;
+                }
+
+                var btnEliminar = "";
+                if (!esMaestra && !tieneMov) {
+                    btnEliminar = "<button onclick='eliminarCuentaPersonalizada(\""+c.id+"\")' style='background-color:#ef4444; border:none; padding:3px 8px; color:white; border-radius:3px; cursor:pointer;'>Eliminar</button>";
+                } else if (tieneMov) {
+                    btnEliminar = "<span style='font-size:11px; color:var(--text-muted);'>Con Movimientos</span>";
+                } else {
+                    btnEliminar = "<span style='font-size:11px; color:var(--text-muted);'>Protegida</span>";
+                }
+
+                html += "<tr>" +
+                    "<td>" + c.id + "</td>" +
+                    "<td>" + c.nombre + "</td>" +
+                    "<td>" + c.clasificacion + "</td>" +
+                    "<td>" + c.naturaleza + "</td>" +
+                    "<td>" + btnEliminar + "</td>" +
+                    "</tr>";
+            }
+            document.getElementById("body-plan-cuentas").innerHTML = html;
+        }
+
+        function crearCuentaPersonalizada() {
+            var cod = document.getElementById("pc-codigo").value.trim();
+            var nom = document.getElementById("pc-nombre").value.trim();
+            var clas = document.getElementById("pc-clasificacion").value;
+            var nat = document.getElementById("pc-naturaleza").value;
+
+            if (!cod || !nom) { alert("Complete código y nombre."); return; }
+
+            var lista = obtenerPlanCuentasCompleto();
+            for (var i = 0; i < lista.length; i++) {
+                if (lista[i].id === cod) { alert("El código de cuenta ya existe."); return; }
+            }
+
+            STATE.px.push({ id: cod, nombre: nom, clasificacion: clas, naturaleza: nat });
+            guardarEnStorage();
+            document.getElementById("pc-codigo").value = "";
+            document.getElementById("pc-nombre").value = "";
+            recargarTodo();
+        }
+
+        function eliminarCuentaPersonalizada(codigo) {
+            var arrFiltrado = [];
+            for (var i = 0; i < STATE.px.length; i++) {
+                if (STATE.px[i].id !== codigo) {
+                    arrFiltrado.push(STATE.px[i]);
+                }
+            }
+            STATE.px = arrFiltrado;
+            guardarEnStorage();
+            recargarTodo();
+        }
+
+        // FORMULARIO DINÁMICO LIBRO DIARIO
+        var totalLineasForm = 2;
+        function reconstruirLineasFormAsiento() {
+            var contenedor = document.getElementById("asiento-lineas-contenedor");
+            contenedor.innerHTML = "";
+            
+            var sugerido = 1;
+            var asientos = obtenerAsientosEntorno();
+            for (var i = 0; i < asientos.length; i++) {
+                var numInt = parseInt(asientos[i].num, 10);
+                if (!isNaN(numInt) && numInt >= sugerido) sugerido = numInt + 1;
+            }
+            if (!editandoAsientoId) {
+                document.getElementById("asiento-num").value = sugerido;
+            }
+
+            for (var i = 0; i < totalLineasForm; i++) {
+                contenedor.appendChild(crearFilaNodoForm(i));
+            }
+            configurarManejadoresAutocomplete();
+        }
+
+        function crearFilaNodoForm(index) {
+            var div = document.createElement("div");
+            div.style.display = "flex";
+            div.style.gap = "10px";
+            div.style.marginBottom = "8px";
+            div.className = "fila-form-asiento";
+            div.setAttribute("data-index", index);
+
+            div.innerHTML = "" +
+                "<div class='autocomplete-wrapper' style='width: 50%;'>" +
+                "  <input type='text' id='input-cta-" + index + "' class='asiento-input-cuenta' placeholder='Escriba código o nombre de cuenta...' autocomplete='off'>" +
+                "</div>" +
+                "<div style='width: 25%;'>" +
+                "  <input type='text' id='input-debe-" + index + "' class='num-col val-debe' placeholder='Debe' onkeyup='formatInputMiles(this)' data-valor='0'>" +
+                "</div>" +
+                "<div style='width: 25%;'>" +
+                "  <input type='text' id='input-haber-" + index + "' class='num-col val-haber' placeholder='Haber' onkeyup='formatInputMiles(this)' data-valor='0'>" +
+                "</div>";
+            return div;
+        }
+
+        function agregarLineaFormulario() {
+            totalLineasForm++;
+            var contenedor = document.getElementById("asiento-lineas-contenedor");
+            contenedor.appendChild(crearFilaNodoForm(totalLineasForm - 1));
+            configurarManejadoresAutocomplete();
+        }
+
+        function evaluarAsientoCuadraturaRealTime() {
+            var debetot = 0;
+            var habertot = 0;
+            var dInputs = document.getElementsByClassName("val-debe");
+            var hInputs = document.getElementsByClassName("val-haber");
+
+            for (var i = 0; i < dInputs.length; i++) {
+                var vD = parseInt(dInputs[i].getAttribute("data-valor"), 10);
+                if (!isNaN(vD)) debetot += vD;
+            }
+            for (var i = 0; i < hInputs.length; i++) {
+                var vH = parseInt(hInputs[i].getAttribute("data-valor"), 10);
+                if (!isNaN(vH)) habertot += vH;
+            }
+
+            var divisor = document.getElementById("cuadrante-validacion");
+            if (debetot === habertot && debetot > 0) {
+                divisor.innerHTML = "✅ Cuadrado: " + formatoMoneda(debetot);
+                divisor.style.color = "var(--color-activo)";
+            } else {
+                divisor.innerHTML = "⚠️ Descuadrado. Debe: " + formatoMoneda(debetot) + " | Haber: " + formatoMoneda(habertot);
+                divisor.style.color = "var(--color-pasivo)";
+            }
+        }
+
+        function configurarManejadoresAutocomplete() {
+            var inputs = document.getElementsByClassName("asiento-input-cuenta");
+            var cuentas = obtenerPlanCuentasCompleto();
+
+            for (var i = 0; i < inputs.length; i++) {
+                (function(inp) {
+                    inp.oninput = function() {
+                        var val = this.value;
+                        cerrarTodosAutocompletes();
+                        if (!val) return false;
+                        var currentFocus = -1;
+
+                        var a = document.createElement("DIV");
+                        a.setAttribute("id", this.id + "autocomplete-list");
+                        a.setAttribute("class", "autocomplete-items");
+                        this.parentNode.appendChild(a);
+
+                        for (var j = 0; j < cuentas.length; j++) {
+                            var matchStr = cuentas[j].id + " " + cuentas[j].nombre;
+                            if (matchStr.toUpperCase().indexOf(val.toUpperCase()) > -1) {
+                                var b = document.createElement("DIV");
+                                b.innerHTML = "<strong>" + cuentas[j].id + "</strong> · " + cuentas[j].nombre;
+                                b.innerHTML += "<input type='hidden' value='" + cuentas[j].id + " · " + cuentas[j].nombre + "'>";
+                                
+                                b.onclick = function() {
+                                    inp.value = this.getElementsByTagName("input")[0].value;
+                                    cerrarTodosAutocompletes();
+                                };
+                                a.appendChild(b);
+                            }
+                        }
+                    };
+
+                    inp.onkeydown = function(e) {
+                        var x = document.getElementById(this.id + "autocomplete-list");
+                        if (x) x = x.getElementsByTagName("div");
+                        if (e.keyCode === 40) { // Abajo
+                            // Lógica de navegación simple por teclado en ES5
+                        } else if (e.keyCode === 13) { // Enter
+                            e.preventDefault();
+                            if (x && x.length > 0) x[0].click();
+                        } else if (e.keyCode === 27) { // Escape
+                            cerrarTodosAutocompletes();
+                        }
+                    };
+                })(inputs[i]);
+            }
+        }
+
+        function cerrarTodosAutocompletes(elmnt) {
+            var x = document.getElementsByClassName("autocomplete-items");
+            for (var i = 0; i < x.length; i++) {
+                if (elmnt !== x[i] && elmnt !== document.getElementsByClassName("asiento-input-cuenta")[i]) {
+                    x[i].parentNode.removeChild(x[i]);
+                }
+            }
+        }
+        document.addEventListener("click", function (e) { cerrarTodosAutocompletes(e.target); });
+
+        // GUARDADO DE TRANSACCIONES
+        function guardarAsiento() {
+            var num = document.getElementById("asiento-num").value.trim();
+            var fecha = document.getElementById("asiento-fecha").value;
+            var ndoc = document.getElementById("asiento-ndoc").value.trim();
+            var glosa = document.getElementById("asiento-glosa").value.trim();
+
+            if (!num || !fecha || !glosa) { alert("N° Asiento, Fecha y Glosa obligatorios."); return; }
+
+            var asientos = obtenerAsientosEntorno();
+            // Comprobar duplicado número de asiento
+            for (var i = 0; i < asientos.length; i++) {
+                if (asientos[i].num === num && asientos[i].id !== editandoAsientoId) {
+                    alert("El número de asiento ya existe. Elija otro."); return;
+                }
+            }
+
+            var lineasValidas = [];
+            var dInputs = document.getElementsByClassName("val-debe");
+            var hInputs = document.getElementsByClassName("val-haber");
+            var cInputs = document.getElementsByClassName("asiento-input-cuenta");
+
+            var totD = 0, totH = 0;
+
+            for (var i = 0; i < cInputs.length; i++) {
+                var cTxt = cInputs[i].value;
+                if (!cTxt) continue;
+                var splitChar = " · ";
+                var parts = cTxt.split(splitChar);
+                var cod = parts[0].trim();
+                var nom = parts[1] ? parts[1].trim() : cod;
+
+                var debeVal = parseInt(dInputs[i].getAttribute("data-valor"), 10) || 0;
+                var haberVal = parseInt(hInputs[i].getAttribute("data-valor"), 10) || 0;
+
+                if (debeVal === 0 && haberVal === 0) continue;
+
+                totD += debeVal;
+                totH += haberVal;
+
+                lineasValidas.push({
+                    cuenta: cTxt,
+                    codigo: cod,
+                    nombre: nom,
+                    debe: debeVal,
+                    haber: haberVal
+                });
+            }
+
+            if (lineasValidas.length < 2) { alert("Un asiento contable requiere 2 líneas mínimas con montos."); return; }
+            if (totD !== totH) { alert("Guardarraíl de Dualidad Económica: Σ Debe (" + totD + ") debe ser estrictamente igual a Σ Haber (" + totH + "). Asiento bloqueado."); return; }
+
+            if (editandoAsientoId) {
+                for (var i = 0; i < asientos.length; i++) {
+                    if (asientos[i].id === editandoAsientoId) {
+                        asientos[i].num = num;
+                        asientos[i].fecha = fecha;
+                        asientos[i].ndoc = ndoc;
+                        asientos[i].glosa = glosa;
+                        asientos[i].lineas = lineasValidas;
+                        break;
+                    }
+                }
+            } else {
+                var nuevoAsiento = {
+                    id: new Date().getTime(),
+                    num: num,
+                    fecha: fecha,
+                    ndoc: ndoc,
+                    glosa: glosa,
+                    lineas: lineasValidas
+                };
+                asientos.push(nuevoAsiento);
+            }
+
+            fijarAsientosEntorno(asientos);
+            editandoAsientoId = null;
+            totalLineasForm = 2;
+            limpiarFormularioAsiento();
+            recargarTodo();
+            alert("Asiento guardado y procesado con éxito.");
+        }
+
+        function limpiarFormularioAsiento() {
+            document.getElementById("asiento-num").value = "";
+            document.getElementById("asiento-fecha").value = "";
+            document.getElementById("asiento-ndoc").value = "";
+            document.getElementById("asiento-glosa").value = "";
+            editandoAsientoId = null;
+            reconstruirLineasFormAsiento();
+        }
+
+        function eliminarAsiento(id) {
+            if (confirm("¿Seguro de eliminar este asiento?")) {
+                var asientos = obtenerAsientosEntorno();
+                var list = [];
+                for (var i = 0; i < asientos.length; i++) {
+                    if (asientos[i].id !== id) list.push(asientos[i]);
+                }
+                fijarAsientosEntorno(list);
+                recargarTodo();
+            }
+        }
+
+        function cargarAsientoParaEditar(id) {
+            var asientos = obtenerAsientosEntorno();
+            var ast = null;
+            for (var i = 0; i < asientos.length; i++) {
+                if (asientos[i].id === id) { ast = asientos[i]; break; }
+            }
+            if (!ast) return;
+
+            editandoAsientoId = ast.id;
+            document.getElementById("asiento-num").value = ast.num;
+            document.getElementById("asiento-fecha").value = ast.fecha;
+            document.getElementById("asiento-ndoc").value = ast.ndoc;
+            document.getElementById("asiento-glosa").value = ast.glosa;
+
+            totalLineasForm = ast.lineas.length;
+            reconstruirLineasFormAsiento();
+
+            var cInputs = document.getElementsByClassName("asiento-input-cuenta");
+            var dInputs = document.getElementsByClassName("val-debe");
+            var hInputs = document.getElementsByClassName("val-haber");
+
+            for (var i = 0; i < ast.lineas.length; i++) {
+                cInputs[i].value = ast.lineas[i].cuenta;
+                
+                dInputs[i].setAttribute("data-valor", ast.lineas[i].debe);
+                if (ast.lineas[i].debe > 0) {
+                    dInputs[i].value = ast.lineas[i].debe;
+                    formatInputMiles(dInputs[i]);
+                }
+                
+                hInputs[i].setAttribute("data-valor", ast.lineas[i].haber);
+                if (ast.lineas[i].haber > 0) {
+                    hInputs[i].value = ast.lineas[i].haber;
+                    formatInputMiles(hInputs[i]);
+                }
+            }
+            evaluarAsientoCuadraturaRealTime();
+            document.getElementById("asiento-num").focus();
+        }
+
+        // RENDER VISTAS PANAL DE CONTROL
+        function renderizarDiarioRegistrado() {
+            var asientos = [].concat(obtenerAsientosEntorno());
+            asientos.sort(function(a,b) { return parseInt(a.num, 10) - parseInt(b.num, 10); });
+
+            var html = "";
+            for (var i = 0; i < asientos.length; i++) {
+                var a = asientos[i];
+                html += "<div style='background-color: var(--bg-card); padding: 12px; margin-bottom: 15px; border-radius: 4px; border-left: 4px solid var(--color-debe);'>" +
+                    "  <div style='display:flex; justify-content:space-between; margin-bottom:8px; font-weight:bold; font-size:13px; color:var(--text-muted);'>" +
+                    "    <span>Asiento N° " + a.num + " | Fecha: " + a.fecha + " | Doc: " + (a.ndoc || "N/A") + "</span>" +
+                    "    <div>" +
+                    "       <button onclick='cargarAsientoParaEditar(" + a.id + ")' style='background-color:#3b82f6; border:none; padding:2px 8px; color:white; border-radius:3px; cursor:pointer; margin-right:5px;'>Editar</button>" +
+                    "       <button onclick='eliminarAsiento(" + a.id + ")' style='background-color:#ef4444; border:none; padding:2px 8px; color:white; border-radius:3px; cursor:pointer;'>Eliminar</button>" +
+                    "    </div>" +
+                    "  </div>" +
+                    "  <table style='margin-bottom:5px;'>" +
+                    "    <thead><tr><th>Cuenta Contable</th><th style='width:20%; text-align:right;'>Debe</th><th style='width:20%; text-align:right;'>Haber</th></tr></thead>" +
+                    "    <tbody>";
+                
+                var td = 0, th = 0;
+                for (var j = 0; j < a.lineas.length; j++) {
+                    var ln = a.lineas[j];
+                    td += ln.debe; th += ln.haber;
+                    html += "<tr>" +
+                        "  <td>" + ln.cuenta + "</td>" +
+                        "  <td class='num-col'>" + (ln.debe > 0 ? formatoMoneda(ln.debe) : "-") + "</td>" +
+                        "  <td class='num-col'>" + (ln.haber > 0 ? formatoMoneda(ln.haber) : "-") + "</td>" +
+                        "</tr>";
+                }
+                
+                html += "      <tr class='total-row'><td>Glosa: " + a.glosa + "</td><td class='num-col'>" + formatoMoneda(td) + "</td><td class='num-col'>" + formatoMoneda(th) + "</td></tr>" +
+                    "    </tbody>" +
+                    "  </table>" +
+                    "</div>";
+            }
+            document.getElementById("diario-registrado-contenedor").innerHTML = html || "<p style='color:var(--text-muted);'>No hay asientos registrados en este entorno.</p>";
+        }
+
+        function renderizarMayor() {
+            var mapa = buildMayor();
+            var html = "";
+            var llaves = Object.keys(mapa);
+
+            for (var k = 0; k < llaves.length; k++) {
+                var c = mapa[llaves[k]];
+                if (c.movimientos.length === 0) continue;
+
+                html += "<div style='margin-bottom:30px; background-color:var(--bg-card); padding:15px; border-radius:6px; border:1px solid var(--border-color);'>" +
+                    "  <h3 style='color:var(--color-activo); margin-bottom:10px;'>" + c.codigo + " " + c.nombre + " <span style='font-size:12px; color:white; font-weight:normal;'>(" + c.clasificacion + ")</span></h3>" +
+                    "  <table>" +
+                    "    <thead><tr><th>Fecha</th><th>Doc</th><th>Descripción / Glosa</th><th style='text-align:right; color:var(--color-debe);'>Debe</th><th style='text-align:right; color:var(--color-haber);'>Haber</th><th style='text-align:right;'>Saldo Acumulado</th></tr></thead>" +
+                    "    <tbody>";
+
+                var runSaldo = 0;
+                for (var i = 0; i < c.movimientos.length; i++) {
+                    var m = c.movimientos[i];
+                    
+                    if (c.naturaleza === "Deudora") {
+                        runSaldo += (m.debe - m.haber);
+                    } else {
+                        runSaldo += (m.haber - m.debe);
+                    }
+
+                    html += "<tr>" +
+                        "  <td>" + m.fecha + "</td>" +
+                        "  <td>" + (m.ndoc || "-") + "</td>" +
+                        "  <td>" + m.glosa + "</td>" +
+                        "  <td class='num-col'>" + (m.debe > 0 ? formatoMoneda(m.debe) : "-") + "</td>" +
+                        "  <td class='num-col'>" + (m.haber > 0 ? formatoMoneda(m.haber) : "-") + "</td>" +
+                        "  <td class='num-col' style='font-weight:bold;'>" + formatoMoneda(runSaldo) + "</td>" +
+                        "</tr>";
+                }
+
+                var finalLabel = "Saldo Deudor";
+                var finalSaldo = c.totalDebe - c.totalHaber;
+                if (c.naturaleza === "Acreedora") {
+                    finalSaldo = c.totalHaber - c.totalDebe;
+                    finalLabel = "Saldo Acreedor";
+                }
+                if (finalSaldo < 0) {
+                    finalLabel = (finalLabel === "Saldo Deudor") ? "Saldo Acreedor (Acrecentado)" : "Saldo Deudor (Acrecentado)";
+                }
+
+                html += "      <tr class='total-row'>" +
+                    "        <td colspan='3'>TOTALES ACUMULADOS</td>" +
+                    "        <td class='num-col double-underline'>" + formatoMoneda(c.totalDebe) + "</td>" +
+                    "        <td class='num-col double-underline'>" + formatoMoneda(c.totalHaber) + "</td>" +
+                    "        <td class='num-col' style='color:var(--color-activo);'>" + finalLabel + ": " + formatoMoneda(Math.abs(finalSaldo)) + "</td>" +
+                    "      </tr>" +
+                    "    </tbody>" +
+                    "  </table>" +
+                    "</div>";
+            }
+            document.getElementById("mayor-contenedor").innerHTML = html || "<p style='color:var(--text-muted);'>Registre movimientos en el Libro Diario para estructurar los flujos del Libro Mayor.</p>";
+        }
+
+        function renderizarComprobacion() {
+            var mapa = buildMayor();
+            var llaves = Object.keys(mapa);
+            
+            var html = "<table>" +
+                "  <thead>" +
+                "    <tr><th>Código</th><th>Cuenta Contable</th><th style='text-align:right;'>Suma Debe</th><th style='text-align:right;'>Suma Haber</th><th style='text-align:right;'>Saldo Deudor</th><th style='text-align:right;'>Saldo Acreedor</th></tr>" +
+                "  </thead><tbody>";
+
+            var sd = 0, sh = 0, sdeu = 0, sac = 0;
+            var activos = false;
+
+            for (var i = 0; i < llaves.length; i++) {
+                var c = mapa[llaves[i]];
+                if (c.totalDebe === 0 && c.totalHaber === 0) continue;
+                activos = true;
+
+                var balDebe = 0, balHaber = 0;
+                var resta = c.totalDebe - c.totalHaber;
+                
+                if (resta >= 0) {
+                    balDebe = resta;
+                } else {
+                    balHaber = Math.abs(resta);
+                }
+
+                sd += c.totalDebe; sh += c.totalHaber;
+                sdeu += balDebe; sac += balHaber;
+
+                html += "<tr>" +
+                    "  <td>" + c.codigo + "</td>" +
+                    "  <td>" + c.nombre + "</td>" +
+                    "  <td class='num-col'>" + formatoMoneda(c.totalDebe) + "</td>" +
+                    "  <td class='num-col'>" + formatoMoneda(c.totalHaber) + "</td>" +
+                    "  <td class='num-col' style='color:var(--color-debe);'>" + (balDebe > 0 ? formatoMoneda(balDebe) : "-") + "</td>" +
+                    "  <td class='num-col' style='color:var(--color-haber);'>" + (balHaber > 0 ? formatoMoneda(balHaber) : "-") + "</td>" +
+                    "</tr>";
+            }
+
+            var cuadraturaOk = (sd === sh && sdeu === sac);
+            var badg = cuadraturaOk ? "<span style='color:var(--color-activo);'>✅ CUADRADO</span>" : "<span style='color:var(--color-pasivo);'>⚠️ DESCUADRADO</span>";
+
+            html += "    <tr class='total-row'>" +
+                "      <td colspan='2'>TOTALES GENERALES " + badg + "</td>" +
+                "      <td class='num-col double-underline'>" + formatoMoneda(sd) + "</td>" +
+                "      <td class='num-col double-underline'>" + formatoMoneda(sh) + "</td>" +
+                "      <td class='num-col double-underline'>" + formatoMoneda(sdeu) + "</td>" +
+                "      <td class='num-col double-underline'>" + formatoMoneda(sac) + "</td>" +
+                "    </tr>" +
+                "  </tbody>" +
+                "</table>";
+
+            document.getElementById("comprobacion-contenedor").innerHTML = activos ? html : "<p style='color:var(--text-muted);'>No hay transacciones guardadas.</p>";
+        }
+
+        function renderizar8Columnas() {
+            var mapa = buildMayor();
+            var llaves = Object.keys(mapa);
+
+            var html = "<table>" +
+                "  <thead>" +
+                "    <tr>" +
+                "       <th rowspan='2'>Código</th><th rowspan='2'>Cuenta Contable</th>" +
+                "       <th colspan='2' style='text-align:center;'>Sumas</th>" +
+                "       <th colspan='2' style='text-align:center;'>Saldos</th>" +
+                "       <th colspan='2' style='text-align:center;'>Inventario</th>" +
+                "       <th colspan='2' style='text-align:center;'>Resultado</th>" +
+                "    </tr>" +
+                "    <tr>" +
+                "       <th style='text-align:right;'>Debe</th><th style='text-align:right;'>Haber</th>" +
+                "       <th style='text-align:right;'>Deudor</th><th style='text-align:right;'>Acreedor</th>" +
+                "       <th style='text-align:right;'>Activo</th><th style='text-align:right;'>Pasivo/Pat</th>" +
+                "       <th style='text-align:right;'>Pérdida</th><th style='text-align:right;'>Ganancia</th>" +
+                "    </tr>" +
+                "  </thead><tbody>";
+
+            var t_deb = 0, t_hab = 0, t_deu = 0, t_acr = 0, t_act = 0, t_pas = 0, t_per = 0, t_gan = 0;
+            var hayDatos = false;
+
+            for (var i = 0; i < llaves.length; i++) {
+                var c = mapa[llaves[i]];
+                if (c.totalDebe === 0 && c.totalHaber === 0) continue;
+                hayDatos = true;
+
+                var sDeudor = 0, sAcreedor = 0;
+                var net = c.totalDebe - c.totalHaber;
+                if (net >= 0) sDeudor = net; else sAcreedor = Math.abs(net);
+
+                var invActivo = 0, invPasivo = 0, resPerdida = 0, resGanancia = 0;
+
+                // REGLAS ESPECÍFICAS DE CLASIFICACIÓN POR NATURALEZA
+                var esCuentaObligada = (c.codigo === "2.3.02" || c.codigo === "2.3.03" || c.codigo === "2.3.04");
+
+                if (esCuentaObligada) {
+                    // Cuentas Obligadas con saldo DEUDOR disminuyen patrimonio -> Columna Inventario DEBE
+                    if (sDeudor > 0) invActivo = sDeudor; else invPasivo = sAcreedor;
+                } else if (c.clasificacion.indexOf("Activo") > -1) {
+                    invActivo = sDeudor; invPasivo = sAcreedor;
+                } else if (c.clasificacion.indexOf("Pasivo") > -1 || c.clasificacion.indexOf("Patrimonio") > -1) {
+                    invPasivo = sAcreedor; invActivo = sDeudor;
+                } else if (c.clasificacion.indexOf("Pérdida") > -1 || c.clasificacion.indexOf("Gasto") > -1) {
+                    resPerdida = sDeudor;
+                } else if (c.clasificacion.indexOf("Ganancia") > -1 || c.clasificacion.indexOf("Ingreso") > -1) {
+                    resGanancia = sAcreedor;
+                }
+
+                t_deb += c.totalDebe; t_hab += c.totalHaber;
+                t_deu += sDeudor; t_acr += sAcreedor;
+                t_act += invActivo; t_pas += invPasivo;
+                t_per += resPerdida; t_gan += resGanancia;
+
+                html += "<tr>" +
+                    "  <td>" + c.codigo + "</td>" +
+                    "  <td>" + c.nombre + "</td>" +
+                    "  <td class='num-col'>" + formatoMoneda(c.totalDebe) + "</td>" +
+                    "  <td class='num-col'>" + formatoMoneda(c.totalHaber) + "</td>" +
+                    "  <td class='num-col'>" + (sDeudor > 0 ? formatoMoneda(sDeudor) : "-") + "</td>" +
+                    "  <td class='num-col'>" + (sAcreedor > 0 ? formatoMoneda(sAcreedor) : "-") + "</td>" +
+                    "  <td class='num-col' style='color:var(--color-activo);'>" + (invActivo > 0 ? formatoMoneda(invActivo) : "-") + "</td>" +
+                    "  <td class='num-col' style='color:var(--color-pasivo);'>" + (invPasivo > 0 ? formatoMoneda(invPasivo) : "-") + "</td>" +
+                    "  <td class='num-col' style='color:var(--color-gasto);'>" + (resPerdida > 0 ? formatoMoneda(resPerdida) : "-") + "</td>" +
+                    "  <td class='num-col' style='color:var(--color-ingreso);'>" + (resGanancia > 0 ? formatoMoneda(resGanancia) : "-") + "</td>" +
+                    "</tr>";
+            }
+
+            // FILA 1: SUB TOTAL
+            html += "<tr class='bg-subtotal' style='font-weight:bold;'>" +
+                "  <td colspan='2'>SUB TOTAL</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_deb) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_hab) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_deu) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_acr) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_act) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_pas) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_per) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_gan) + "</td>" +
+                "</tr>";
+
+            // CALCULO AJUSTES DE RESULTADO / UTILIDAD O PERDIDA
+            var difInventario = t_act - t_pas;
+            var difResultado = t_gan - t_per;
+
+            var lineaResultadoTexto = "UTILIDAD DEL EJERCICIO";
+            var invActFila = 0, invPasFila = 0, resPerFila = 0, resGanFila = 0;
+            var claseResultado = "bg-resultado-utilidad";
+
+            if(difResultado >= 0) {
+                // Utilidad
+                resPerFila = difResultado;
+                invPasFila = difResultado;
+            } else {
+                // Pérdida
+                lineaResultadoTexto = "PÉRDIDA DEL EJERCICIO";
+                resGanFila = Math.abs(difResultado);
+                invActFila = Math.abs(difResultado);
+                claseResultado = "bg-resultado";
+            }
+
+            // FILA 2: UTILIDAD O PÉRDIDA DEL EJERCICIO
+            html += "<tr class='" + claseResultado + "' style='font-weight:bold;'>" +
+                "  <td colspan='2'>" + lineaResultadoTexto + "</td>" +
+                "  <td class='num-col'>-</td><td class='num-col'>-</td><td class='num-col'>-</td><td class='num-col'>-</td>" +
+                "  <td class='num-col'>" + (invActFila > 0 ? formatoMoneda(invActFila) : "-") + "</td>" +
+                "  <td class='num-col'>" + (invPasFila > 0 ? formatoMoneda(invPasFila) : "-") + "</td>" +
+                "  <td class='num-col'>" + (resPerFila > 0 ? formatoMoneda(resPerFila) : "-") + "</td>" +
+                "  <td class='num-col'>" + (resGanFila > 0 ? formatoMoneda(resGanFila) : "-") + "</td>" +
+                "</tr>";
+
+            // FILA 3: TOTALES FINALES CUADRADOS
+            html += "<tr class='bg-totales' style='font-weight:bold;'>" +
+                "  <td colspan='2'>TOTALES TOTALES</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_deb) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_hab) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_deu) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_acr) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_act + invActFila) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_pas + invPasFila) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_per + resPerFila) + "</td>" +
+                "  <td class='num-col'>" + formatoMoneda(t_gan + resGanFila) + "</td>" +
+                "</tr>";
+
+            html += "</tbody></table>";
+
+            document.getElementById("ocho-contenedor").innerHTML = hayDatos ? html : "<p style='color:var(--text-muted);'>No hay datos.</p>";
+        }
+
+        function renderizarSituacion() {
+            var mapa = buildMayor();
+            var llaves = Object.keys(mapa);
+
+            var totalActivo = 0;
+            var totalPasivo = 0;
+            var totalPatrimonio = 0;
+
+            var htmlActivos = "<h4>ACTIVOS</h4><table>";
+            var htmlPasivos = "<h4>PASIVOS</h4><table>";
+            var htmlPatrimonio = "<h4>PATRIMONIO</h4><table>";
+
+            var tGan = 0, tPer = 0;
+
+            for (var i = 0; i < llaves.length; i++) {
+                var c = mapa[llaves[i]];
+                var sDeu = 0, sAcr = 0;
+                var net = c.totalDebe - c.totalHaber;
+                if (net >= 0) sDeu = net; else sAcr = Math.abs(net);
+
+                if (c.clasificacion.indexOf("Ganancia") > -1 || c.clasificacion.indexOf("Ingreso") > -1) tGan += sAcr;
+                if (c.clasificacion.indexOf("Pérdida") > -1 || c.clasificacion.indexOf("Gasto") > -1) tPer += sDeu;
+
+                if (c.totalDebe === 0 && c.totalHaber === 0) continue;
+
+                var esCuentaObligada = (c.codigo === "2.3.02" || c.codigo === "2.3.03" || c.codigo === "2.3.04");
+
+                if (esCuentaObligada) {
+                    // REGLAS CRÍTICA SOLUCIONADA: Si Cuenta Obligada tiene saldo DEUDOR en Libro Mayor -> NEGATIVO en Patrimonio
+                    var valorObligada = 0;
+                    var esNegativo = false;
+                    
+                    if (c.totalDebe > c.totalHaber) {
+                        valorObligada = -(c.totalDebe - c.totalHaber);
+                        esNegativo = true;
+                    } else {
+                        valorObligada = (c.totalHaber - c.totalDebe);
+                    }
+
+                    totalPatrimonio += valorObligada;
+                    var strValor = esNegativo ? "<span class='negativo-patrimonio'>(" + formatoMoneda(Math.abs(valorObligada)) + ")</span>" : formatoMoneda(valorObligada);
+                    
+                    htmlPatrimonio += "<tr><td>" + c.codigo + " " + c.nombre + "</td><td class='num-col'>" + strValor + "</td></tr>";
+                    
+                } else if (c.clasificacion.indexOf("Activo") > -1) {
+                    var valCta = (c.naturaleza === "Deudora") ? (c.totalDebe - c.totalHaber) : (c.totalHaber - c.totalDebe);
+                    totalActivo += valCta;
+                    htmlActivos += "<tr><td>" + c.codigo + " " + c.nombre + "</td><td class='num-col'>" + formatoMoneda(valCta) + "</td></tr>";
+                    
+                } else if (c.clasificacion.indexOf("Pasivo") > -1) {
+                    var valCta = (c.naturaleza === "Acreedora") ? (c.totalHaber - c.totalDebe) : (c.totalDebe - c.totalHaber);
+                    totalPasivo += valCta;
+                    htmlPasivos += "<tr><td>" + c.codigo + " " + c.nombre + "</td><td class='num-col'>" + formatoMoneda(valCta) + "</td></tr>";
+                    
+                } else if (c.clasificacion === "Patrimonio Capital") {
+                    var valCta = c.totalHaber - c.totalDebe;
+                    totalPatrimonio += valCta;
+                    htmlPatrimonio += "<tr><td>" + c.codigo + " " + c.nombre + "</td><td class='num-col'>" + formatoMoneda(valCta) + "</td></tr>";
+                }
+            }
+
+            // Agregar Utilidad o Pérdida del Ejercicio al Patrimonio
+            var resultadoEjercicio = tGan - tPer;
+            totalPatrimonio += resultadoEjercicio;
+
+            var alertPedagogicaHtml = "";
+            if (resultadoEjercicio >= 0) {
+                htmlPatrimonio += "<tr><td style='color:var(--color-activo); font-weight:bold;'>UTILIDAD DEL EJERCICIO</td><td class='num-col' style='color:var(--color-activo); font-weight:bold;'>" + formatoMoneda(resultadoEjercicio) + "</td></tr>";
+                alertPedagogicaHtml = "<div class='alerta-pedagogica alerta-verde'>La utilidad del ejercicio aumenta el PATRIMONIO</div>";
+            } else {
+                htmlPatrimonio += "<tr><td style='color:var(--color-pasivo); font-weight:bold;'>PÉRDIDA DEL EJERCICIO</td><td class='num-col' style='color:var(--color-pasivo); font-weight:bold;'>(" + formatoMoneda(Math.abs(resultadoEjercicio)) + ")</td></tr>";
+                alertPedagogicaHtml = "<div class='alerta-pedagogica alerta-roja'>La pérdida del ejercicio disminuye el PATRIMONIO</div>";
+            }
+
+            // Verificar si hay Cuentas Obligadas con saldo deudor para desplegar alerta complementaria
+            for (var i = 0; i < llaves.length; i++) {
+                var c = mapa[llaves[i]];
+                if ((c.codigo === "2.3.02" || c.codigo === "2.3.03" || c.codigo === "2.3.04") && c.totalDebe > c.totalHaber) {
+                    alertPedagogicaHtml += "<div class='alerta-pedagogica alerta-roja'>Aporte pendiente por enterar del " + c.nombre.toUpperCase() + " — disminuye el Patrimonio</div>";
+                }
+            }
+
+            htmlActivos += "<tr class='total-row'><td>TOTAL ACTIVOS</td><td class='num-col'>" + formatoMoneda(totalActivo) + "</td></tr></table>";
+            htmlPasivos += "<tr class='total-row'><td>TOTAL PASIVOS</td><td class='num-col'>" + formatoMoneda(totalPasivo) + "</td></tr></table>";
+            htmlPatrimonio += "<tr class='total-row'><td>TOTAL PATRIMONIO NETO</td><td class='num-col'>" + formatoMoneda(totalPatrimonio) + "</td></tr></table>";
+
+            var pasMasPat = totalPasivo + totalPatrimonio;
+            var cuadraturaFinalOk = (Math.abs(totalActivo - pasMasPat) < 2);
+            var badgeCuad = cuadraturaFinalOk ? "<span style='color:var(--color-activo);'>✅ CUADRADO (ACTIVO = PASIVO + PATRIMONIO)</span>" : "<span style='color:var(--color-pasivo);'>⚠️ DESCUADRADO</span>";
+
+            var htmlFinal = alertPedagogicaHtml + 
+                "<div style='display:flex; gap:20px; flex-wrap:wrap; margin-top:15px;'>" +
+                "  <div style='flex:1; min-width:300px;'>" + htmlActivos + "</div>" +
+                "  <div style='flex:1; min-width:300px;'>" + htmlPasivos + "<br>" + htmlPatrimonio + "</div>" +
+                "</div>" +
+                "<div style='margin-top:20px; background-color:var(--bg-input); padding:15px; font-weight:bold; border-radius:4px; border:1px solid var(--border-color); display:flex; justify-content:space-between;'>" +
+                "  <span>Ecuación de Contabilidad:</span>" +
+                "  <span>Activo (" + formatoMoneda(totalActivo) + ") = Pasivo + Pat (" + formatoMoneda(pasMasPat) + ") | " + badgeCuad + "</span>" +
+                "</div>";
+
+            document.getElementById("situacion-contenedor").innerHTML = htmlFinal;
+        }
+
+        // PANEL DE DOCUMENTOS EXTERNOS
+        var panelDocsAbierto = false;
+        function togglePanelDocs() {
+            panelDocsAbierto = !panelDocsAbierto;
+            var p = document.getElementById("panel-documentos");
+            if (panelDocsAbierto) p.classList.add("open"); else p.classList.remove("open");
+            renderizarDocumentos();
+        }
+
+        function subirDocumento() {
+            var fInput = document.getElementById("file-doc-input");
+            if(fInput.files.length === 0) return;
+            var file = fInput.files[0];
+            
+            if (file.size > 10 * 1024 * 1024) { alert("El archivo supera el tope de 10MB regulado."); return; }
+
+            // Guardar metadatos en LocalStorage
+            STATE.docs.push({
+                id: new Date().getTime(),
+                nombre: file.name,
+                tipo: file.type
+            });
+            guardarEnStorage();
+            fInput.value = "";
+            renderizarDocumentos();
+        }
+
+        function renderizarDocumentos() {
+            var html = "";
+            for (var i = 0; i < STATE.docs.length; i++) {
+                var d = STATE.docs[i];
+                html += "<div class='doc-item'>" +
+                    "  <span style='font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px;'>📄 " + d.nombre + "</span>" +
+                    "  <button onclick='eliminarDoc(" + d.id + ")' style='background:none; border:none; color:#ef4444; cursor:pointer;'>&times;</button>" +
+                    "</div>";
+            }
+            document.getElementById("lista-documentos").innerHTML = html || "<p style='color:var(--text-muted); font-size:12px;'>No hay documentos cargados en el ejercicio.</p>";
+        }
+
+        function eliminarDoc(id) {
+            var filtrados = [];
+            for (var i = 0; i < STATE.docs.length; i++) {
+                if (STATE.docs[i].id !== id) filtrados.push(STATE.docs[i]);
+            }
+            STATE.docs = filtrados;
+            guardarEnStorage();
+            renderizarDocumentos();
+        }
+
+        // REINICIAR EJERCICIO
+        function confirmarReiniciar() {
+            document.getElementById("modal-confirm-texto").innerHTML = "Atención: Esta acción borrará de forma irreversible todos los asientos contables registrados y recalculados en este entorno, pero conservará las cuentas del Plan de Cuentas.";
+            document.getElementById("modal-confirm").style.display = "flex";
+            document.getElementById("modal-confirm-btn-ok").onclick = function() {
+                if (entornoActual === "libre") STATE.al = []; else STATE.ap = [];
+                guardarEnStorage();
+                cerrarModalConfirm();
+                limpiarFormularioAsiento();
+                recargarTodo();
+                alert("Asiento contable reiniciado. Vistas en blanco.");
+            };
+        }
+
+        function cerrarModalConfirm() {
+            document.getElementById("modal-confirm").style.display = "none";
+        }
+
+        // SOLUCIÓN BUG CRÍTICO: MOTOR DE IMPRESIÓN MODAL PARA ALUMNOS (DISEÑO BLANCO IMPRIMIBLE CON IFRAME COLOSTRADO)
+        function abrirModalPDF() {
+            document.getElementById("modal-pdf").style.display = "flex";
+            var bodyRender = document.getElementById("modal-pdf-render-body");
+            
+            // Reconstrucción estricta de tablas en blanco/negro de alta legibilidad académica
+            var html = "<div style='color:black; font-family:sans-serif; padding:10px;'> " +
+                "  <div style='text-align:center; margin-bottom:20px; border-bottom:2px solid black; padding-bottom:10px;'>" +
+                "    <h1 style='font-size:24px; margin:0;'>ContaFlux — Reporte Contable de Alumnos</h1>" +
+                "    <p style='font-size:12px; margin:5px 0 0 0;'>Fecha Emisión: " + new Date().toLocaleDateString() + " | Entorno: " + entornoActual.toUpperCase() + "</p>" +
+                "  </div>";
+
+            // Secciones: 1. Libro Diario, 2. Libro Mayor, 3. Balances.
+            html += "<h2 style='font-size:16px; margin-top:20px; border-bottom:1px solid black;'>1. LIBRO DIARIO GENERAL</h2>";
+            var asientos = [].concat(obtenerAsientosEntorno());
+            asientos.sort(function(a,b) { return parseInt(a.num, 10) - parseInt(b.num, 10); });
+
+            if (asientos.length === 0) {
+                html += "<p>No hay registros en el Libro Diario.</p>";
+            } else {
+                for (var i = 0; i < asientos.length; i++) {
+                    var a = asientos[i];
+                    html += "<p style='margin:10px 0 2px 0; font-weight:bold; font-size:12px;'>Asiento N° " + a.num + " (Fecha: " + a.fecha + " " + (a.ndoc ? "| Doc: "+a.ndoc : "") + ")</p>" +
+                        "<table style='width:100%; border-collapse:collapse; margin-bottom:10px; color:black; font-size:12px;'>" +
+                        "  <thead><tr style='background-color:#eaeaea;'><th style='border:1px solid black; padding:4px;'>Cuenta</th><th style='border:1px solid black; padding:4px; text-align:right; width:20%;'>Debe</th><th style='border:1px solid black; padding:4px; text-align:right; width:20%;'>Haber</th></tr></thead>" +
+                        "  <tbody>";
+                    for(var j=0; j<a.lineas.length; j++) {
+                        var l = a.lineas[j];
+                        html += "<tr>" +
+                            "  <td style='border:1px solid black; padding:4px;'>" + l.cuenta + "</td>" +
+                            "  <td style='border:1px solid black; padding:4px; text-align:right;'>" + (l.debe > 0 ? formatoMoneda(l.debe) : "-") + "</td>" +
+                            "  <td style='border:1px solid black; padding:4px; text-align:right;'>" + (l.haber > 0 ? formatoMoneda(l.haber) : "-") + "</td>" +
+                            "</tr>";
+                    }
+                    html += "<tr><td style='border:1px solid black; padding:4px; font-style:italic;'>Glosa: " + a.glosa + "</td><td colspan='2' style='border:1px solid black;'></td></tr></tbody></table>";
+                }
+            }
+
+            // Inserción obligatoria de firmas contables pedagógicas
+            html += "<div style='margin-top:40px; text-align:center; font-size:11px; font-weight:bold; border-top:1px dashed black; padding-top:15px;'>" +
+                "  CREADO POR @prof_josemunoz" +
+                "</div></div>";
+
+            bodyRender.innerHTML = html;
+        }
+
+        function ejecutarImpresionFlujo() {
+            var contenido = document.getElementById("modal-pdf-render-body").innerHTML;
+            
+            // Solución Multi-entorno: Inyección de iframe invisible para aislar estilos oscuros de la app base
+            var iframe = document.createElement("iframe");
+            iframe.style.position = "absolute";
+            iframe.style.top = "-9999px";
+            iframe.style.left = "-9999px";
+            document.body.appendChild(iframe);
+            
+            var doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write("<html><head><title>Impresión Contable — Alumnos</title>");
+            doc.write("<style>table { width:100%; border-collapse:collapse; } th, td { border:1px solid black; padding:6px; text-align:left; } .num-col { text-align:right; }</style>");
+            doc.write("</head><body style='background:white; color:black;'>");
+            doc.write(contenido);
+            doc.write("</body></html>");
+            doc.close();
+
+            // Retraso controlado para permitir renderizado tipográfico antes del trigger nativo
+            setTimeout(function() {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                document.body.removeChild(iframe);
+            }, 600);
+        }
+
+        function cerrarModalPDF() {
+            document.getElementById("modal-pdf").style.display = "none";
+        }
+    </script>
+</body>
+</html>
