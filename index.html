@@ -1452,5 +1452,79 @@
             document.getElementById("modal-pdf").style.display = "none";
         }
     </script>
+    <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+  import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDil3Ltr3uV5_wNgl3WlZga1U0sWt6GJiU",
+    authDomain: "app-proceso-contable2.firebaseapp.com",
+    databaseURL: "https://app-proceso-contable2-default-rtdb.firebaseio.com",
+    projectId: "app-proceso-contable2",
+    storageBucket: "app-proceso-contable2.appspot.com",
+    messagingSenderId: "954134787088",
+    appId: "1:954134787088:web:35a32974dcfd08baf50695",
+    measurementId: "G-7BPZTXDX4G"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const database = getDatabase(app);
+
+  // Esperamos a que todo el HTML y las funciones nativas estén en memoria
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      if (typeof window.registrarAsiento === 'function') {
+        const funcionOriginalContaFlux = window.registrarAsiento;
+
+        // Redefinimos la función: Hace lo local Y ADEMÁS respalda en la nube
+        window.registrarAsiento = function() {
+          funcionOriginalContaFlux();
+
+          const numRaw = document.getElementById('a-num')?.value.trim();
+          const glosa  = document.getElementById('a-glosa')?.value.trim();
+          
+          if (numRaw && glosa) {
+            const fecha = document.getElementById('a-fecha')?.value;
+            const ndoc  = document.getElementById('a-ndoc')?.value.trim();
+            const lineas = [];
+            
+            document.querySelectorAll('.linea-row').forEach(function(r){
+              const cuentaInp = r.querySelector('input[type="text"]');
+              const cuenta = cuentaInp?.value.trim() || '';
+              const codigo = cuentaInp?.dataset.codigo || '';
+              const nombre = cuentaInp?.dataset.nombre || cuenta;
+              
+              const rawDebe = r.querySelector('[data-role="debe"]')?.dataset.raw || r.querySelector('[data-role="debe"]')?.value || "0";
+              const rawHaber = r.querySelector('[data-role="haber"]')?.dataset.raw || r.querySelector('[data-role="haber"]')?.value || "0";
+              const d = parseFloat(rawDebe.replace(/\./g,'')) || 0;
+              const h = parseFloat(rawHaber.replace(/\./g,'')) || 0;
+              
+              if (cuenta && (d || h)) {
+                lineas.push({ cuenta: cuenta, codigo: codigo, nombre: nombre, debe: d, haber: h });
+              }
+            });
+
+            const datosAsientoFirebase = {
+              numAsiento: numRaw,
+              fecha: fecha,
+              glosa: glosa,
+              n_documento: ndoc,
+              lineasDetalle: lineas,
+              fechaRegistroCloud: new Date().toISOString()
+            };
+
+            const referenciaAsientos = ref(database, 'asientos_docentes');
+            const nuevoAsientoRef = push(referenciaAsientos);
+            
+            set(nuevoAsientoRef, datosAsientoFirebase)
+              .then(() => console.log("¡Asiento respaldado en Firebase!"))
+              .catch((e) => console.error("Error al subir a Firebase:", e));
+          }
+        };
+        console.log("¡Firebase acoplado con éxito a ContaFlux!");
+      }
+    }, 500);
+  });
+</script>
 </body>
 </html>
